@@ -78,6 +78,7 @@ function validateDirStructure(arch)
   {
     if (fs.existsSync(arch + '/integration/documentation'))
     {
+      files = fs.readdirSync(arch + '/integration/documentation');
       files.forEach(function (file)
       {
         if (file.endsWith('.html'))
