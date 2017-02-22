@@ -130,6 +130,7 @@ function validateDirStructure(arch)
       if (file.endsWith('lamd'))
       {
         found.lamd = true;
+        found.lamdFileName = file;
         logger('INFO', 'lamd file found ' + file);
       }
     });
@@ -184,6 +185,12 @@ function validateDirStructure(arch)
       chkPath(defFile, 'display_name', found.defFileName, true);
       chkPath(defFile, 'description', found.defFileName, true);
       chkPath(defFile, 'users', found.defFileName, true);
+      var scope = chkPath(defFile, 'users.scope', found.defFileName, true);
+      if (scope && scope !== 'type' && scope !== 'instance') {
+        logger('ERROR', 'users.scope can only be "type" or "instance" ');
+      } else {
+        logger('INFO', 'users.scope correctly defined as "' + scope+'"');
+      }
       chkPath(defFile, 'LAMs', found.defFileName, false);
       chkPath(defFile, 'moolets', found.defFileName, false);
       chkPath(defFile, 'inputs', found.defFileName, true);
@@ -198,9 +205,23 @@ function validateDirStructure(arch)
     if (found.lambot && defFile) {
       lambotName = chkPath(defFile, 'LAMs.filter.presend', found.defFileName);
       if (lambotName !== found.lambotFileName) {
-        logger('ERROR', found.defFileName + ' presend "'+lambotName + '" Not the same as the lambot file name '+found.lambotFileName);
+        logger('ERROR', found.defFileName + ' presend "'+lambotName + '" not the same as the lambot file name '+found.lambotFileName);
       } else {
         logger('INFO', found.defFileName + ' referenced Lambot '+lambotName+' found and correct');
+      }
+    }
+    if (found.lamd && defFile) {
+      if (chkPath(defFile, 'LAMs.service', found.defFileName) !== found.lamdFileName) {
+        logger('ERROR', found.lamdFileName + ' not the same as the LAMS.service file name '+chkPath(defFile, 'LAMs.service', found.defFileName));
+      } else {
+        logger('INFO', found.lamdFileName + ' referenced in def LAMs.service found and correct');
+      }
+    }
+    if (found.lam && defFile) {
+      if (chkPath(defFile, 'LAMs.process', found.defFileName) !== found.lamFileName) {
+        logger('ERROR', found.lamFileName + ' not the same as the LAMS.process file name '+chkPath(defFile, 'LAMs.process', found.defFileName));
+      } else {
+        logger('INFO', found.lamFileName + ' referenced in def LAMs.process found and correct');
       }
     }
     if (found.lambot && confFile) {
