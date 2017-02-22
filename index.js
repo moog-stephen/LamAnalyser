@@ -8,9 +8,10 @@ var util = require('util');
 var zip = require('zip-local');
 var path = require('path');
 var chalk = require('chalk');
+
 var info = true;
 var debug = false;
-var zipFile;
+var zipFile, defFile, confFile;
 
 program
   .version('1.0.1')
@@ -22,16 +23,16 @@ program
     debug = !!program.debug;
     info = !program.info;
 
-    var fileName = zipFile.endsWith('.zip') ? zipFile : zipFile + '.zip';
+    var zipFileName = zipFile.endsWith('.zip') ? zipFile : zipFile + '.zip';
 
-    if (!fs.existsSync(fileName))
+    if (!fs.existsSync(zipFileName))
     {
-      console.log('File %s not found', fileName);
+      console.log('File %s not found', zipFileName);
       process.exit(1);
     }
 
-    logger('INFO', 'Validating zip: ' + fileName);
-    validate(fileName);
+    logger('INFO', 'Validating zip: ' + zipFileName);
+    validate(zipFileName);
   })
   .parse(process.argv);
 
@@ -41,15 +42,15 @@ if (typeof zipFile === 'undefined')
   process.exit(1);
 }
 
-function validate(fileName)
+function validate(zipFileName)
 {
-  var dirName = './' + fileName.replace('.zip', '');
-  logger('INFO', 'Reading file ' + fileName);
+  var dirName = './' + zipFileName.replace('.zip', '');
+  logger('INFO', 'Reading file ' + zipFileName);
   if (!fs.existsSync(dirName))
   {
     fs.mkdirSync(dirName);
   }
-  zip.sync.unzip(fileName).save(dirName);
+  zip.sync.unzip(zipFileName).save(dirName);
   logger('INFO', 'File unzipped to ' + dirName);
 
   // validations
@@ -58,12 +59,18 @@ function validate(fileName)
   process.exit(0);
 }
 
+
+/**
+ *
+ * @param arch
+ */
 function validateDirStructure(arch)
 {
   var files = [];
   var found = {};
+  var lambotName;
 
-  logger('INFO', 'Validating directory structure');
+  logger('INFO', 'Validating directory structure for ' + arch);
   if (!fs.existsSync(arch + '/integration'))
   {
     logger('ERROR', 'No integration directory');
@@ -89,8 +96,9 @@ function validateDirStructure(arch)
       if (file.endsWith('.def'))
       {
         found.def = true;
+        found.defFileName = file;
         logger('INFO', '.def file found ' + file);
-        validateJSONfile(arch + '/integration/' + file, 'DEF');
+        defFile = validateJSONfile(arch + '/integration/' + file);
       }
       if (file.endsWith('64.png'))
       {
@@ -109,12 +117,14 @@ function validateDirStructure(arch)
       if (file.endsWith('.conf'))
       {
         found.conf = true;
+        found.confFileName = file;
         logger('INFO', '.conf file found ' + file);
-        validateJSONfile(arch + '/lam/' + file, 'CONF');
+        confFile = validateJSONfile(arch + '/lam/' + file);
       }
       if (file.endsWith('_lam'))
       {
         found.lam = true;
+        found.lamFileName = file;
         logger('INFO', '_lam file found ' + file);
       }
       if (file.endsWith('lamd'))
@@ -129,6 +139,7 @@ function validateDirStructure(arch)
       if (file.endsWith('.js'))
       {
         found.lambot = true;
+        found.lambotFileName = file;
         logger('INFO', 'lambot .js file found ' + file);
       }
     });
@@ -164,10 +175,65 @@ function validateDirStructure(arch)
     {
       logger('ERROR', 'No lambot .js file found.');
     }
+    if (defFile)
+    {
+      var reVer = /([\d.]+)(\.zip|$)/g;
+      chkPath(defFile, 'type', found.defFileName, false);
+      var version = chkPath(defFile, 'version', found.defFileName, false);
+      chkPath(defFile, 'category', found.defFileName, false);
+      chkPath(defFile, 'display_name', found.defFileName, true);
+      chkPath(defFile, 'description', found.defFileName, true);
+      chkPath(defFile, 'users', found.defFileName, true);
+      chkPath(defFile, 'LAMs', found.defFileName, false);
+      chkPath(defFile, 'moolets', found.defFileName, false);
+      chkPath(defFile, 'inputs', found.defFileName, true);
+      chkPath(defFile, 'readonly', found.defFileName, true);
+
+      if (version !== String(arch.match(reVer))) {
+        logger('ERROR', 'Archive file name doesn\'t match version. ' + version + ' <> ' + String(arch.match(reVer)));
+      } else {
+        logger('INFO', 'Archive file name and version match: ' + arch + ' = '+version);
+      }
+    }
+    if (found.lambot && defFile) {
+      lambotName = chkPath(defFile, 'LAMs.filter.presend', found.defFileName);
+      if (lambotName !== found.lambotFileName) {
+        logger('ERROR', found.defFileName + ' presend "'+lambotName + '" Not the same as the lambot file name '+found.lambotFileName);
+      } else {
+        logger('INFO', found.defFileName + ' referenced Lambot '+lambotName+' found and correct');
+      }
+    }
+    if (found.lambot && confFile) {
+      lambotName = chkPath(confFile, 'config.filter.presend', found.confFileName);
+      if (lambotName !== found.lambotFileName) {
+        logger('ERROR', found.confFileName + ' presend "'+lambotName + '" Not the same as the lambot file name '+found.lambotFileName);
+      } else {
+        logger('INFO', found.confFileName +' referenced Lambot '+lambotName+' found and correct');
+      }
+    }
+    if (found.lam && found.conf)
+    {
+      if (found.confFileName.startsWith(found.lamFileName))
+      {
+        logger('INFO', 'lam and lam conf filenames match.');
+      } else
+      {
+        logger('ERROR', 'lam and lam conf filenames don\'t match. ' + found.lamFileName + ' <> ' + found.confFileName);
+      }
+    }
+
+    if (defFile && confFile)
+    {
+      // Compare the files and content
+      chkEqu(defFile, confFile, found.defFileName, found.confFileName, 'LAMs.monitor.name', 'config.monitor.name');
+      chkEqu(defFile, confFile, found.defFileName, found.confFileName, 'LAMs.monitor.class', 'config.monitor.class');
+      chkEqu(defFile, confFile, found.defFileName, found.confFileName, 'LAMs.agent.name', 'config.agent.name');
+      chkEqu(defFile, confFile, found.defFileName, found.confFileName, 'LAMs.filter.presend', 'config.filter.presend');
+    }
   }
 }
 
-function validateJSONfile(fileName, type)
+function validateJSONfile(fileName)
 {
   var start = 0;
   logger('INFO', 'Validating JSON file ' + fileName);
@@ -191,28 +257,7 @@ function validateJSONfile(fileName, type)
 
   logger('DEBUG', util.inspect(fileObj));
 
-  switch (type)
-  {
-    case 'DEF' :
-      // Test key items in the .def
-      if (!fileObj.inputs)
-      {
-        logger('ERROR', 'No inputs declaration in ' + fileName);
-      }
-      break;
-    case 'CONF':
-      if (!fileObj.config)
-      {
-        logger('ERROR', 'No config declarion in ' + fileName);
-        return;
-      }
-      if (!fileObj.config.mapping)
-      {
-        logger('ERROR', 'No Mapping declarion in ' + fileName);
-        return;
-      }
-  }
-
+  return fileObj;
 }
 
 function cleanMjson(mjson)
@@ -271,4 +316,113 @@ function logger(level, message)
       break
   }
   console.log('[%s] - %s', level, message);
+}
+
+//
+// Tests for the existence of a value or sub-object included in the object tree to access the object/value.
+// @param {object} obj Core object to test
+// @param {string} path The full path to the node required
+// @param {boolean} allowEmpty Produce error or warning for empty elements
+// @returns {*} undefined or the value of the node
+//
+function chkPath(obj, path, objName, allowEmpty)
+{
+  'use strict';
+
+  allowEmpty = !!allowEmpty;
+  // Split the keys into an array
+  //
+  var keys = path.split('.');
+
+  // Copy the object reference
+  //
+  var cur = obj;
+  var prev = {};
+  var key = 0;
+
+  // Check the object exists
+  //
+  if (!cur || cur == null || typeof(cur) === 'undefined')
+  {
+    logger('WARN', "No object '+objName+' passed for path " + path);
+    return;
+  }
+
+  // Start from 0 because we don't expect the base object name to be index 0
+  // traverse the key chain to the leaf
+  //
+  for (var i = 0; i < keys.length; i += 1)
+  {
+
+    key = keys[i];
+    prev = cur;
+    //console.log('FILE '+objName+' '+key+' Array '+(cur[key] instanceof Array));
+    if ((cur[key] instanceof Array))
+    {
+      cur = cur[key][0];
+    } else
+    {
+      cur = cur[key];
+    }
+
+    // If we can't find a path to the leaf return undefined
+    //
+    if (typeof(cur) === 'undefined')
+    {
+      if (i === keys.length - 1)
+      {
+        if (allowEmpty)
+        {
+          logger('WARN', 'Element "' + path + '" found but is empty in ' + objName);
+        } else
+        {
+          logger('ERROR', 'Element "' + path + '" found but is empty in ' + objName);
+        }
+      } else
+      {
+        logger('ERROR', 'No element "' + path + '" found in ' + objName);
+      }
+      //logger('ERROR', util.inspect(obj));
+      return;
+    }
+  }
+
+  logger('INFO', 'Found ' + path + ' in ' + objName);
+  // We found the leaf, return the value
+  //
+  return cur;
+}
+//
+// End function chkPath
+
+/**
+ *
+ * @param obj1
+ * @param obj2
+ * @param name1
+ * @param name2
+ * @param path1
+ * @param path2
+ * @returns {boolean}
+ */
+function chkEqu(obj1, obj2, name1, name2, path1, path2)
+{
+  if (!obj1 || !obj2 || !name1 || !name2 || !path1)
+  {
+    logger('WARN', 'Missing parameter in chkEqu');
+    return false;
+  }
+  if (!path2)
+  {
+    path2 = path1;
+  }
+  if (chkPath(obj1, path1, name1) == chkPath(obj2, path2, name2))
+  {
+    logger('INFO', 'Matching elements for ' + path1 + ' :' + chkPath(obj1, path1, name1));
+    return true;
+  } else
+  {
+    logger('WARN', 'NON Matching elements for ' + path1 + ' ("' + chkPath(obj1, path1, name1) + '" != "' + chkPath(obj2, path2, name2) + '")');
+    return false;
+  }
 }
