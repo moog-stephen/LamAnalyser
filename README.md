@@ -1,6 +1,6 @@
-#pakval
+# pakval
 
-##Overview
+## Overview
 
 Small utility to validate a Moogsoft Solution Pak .zip
 
@@ -23,7 +23,7 @@ Example:
  
 Outputs only warn and error level mesages from the AnsibleTower-1.0.zip Solution Pak.
 
-##Installation
+## Installation
 
 Download and from the directory with the package.json run.
 
@@ -32,6 +32,6 @@ Download and from the directory with the package.json run.
 
 Link to a directory on your path if requred, or run localy with ./
 
-##Licence
+## Licence
 
 (c) 2017 Moogsoft Inc. Licence MIT, see LICENCE.
