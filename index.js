@@ -14,7 +14,7 @@ var debug = false;
 var zipFile, defFile, confFile;
 
 program
-  .version('1.0.1')
+  .version('1.0.2')
   .arguments('<zipFile>')
   .option('-d, --debug', 'Debug level output')
   .option('-i, --info', 'Suppress info level output')
@@ -163,11 +163,11 @@ function validateDirStructure(arch)
     }
     if (!found.conf)
     {
-      logger('ERROR', 'No lam .conf file found.');
+      logger('WARN', 'No lam .conf file found.');
     }
     if (!found.lamd)
     {
-      logger('ERROR', 'No lam init.d service file found.');
+      logger('WARN', 'No lam init.d service file found.');
     }
     if (!found.lam)
     {
@@ -194,8 +194,9 @@ function validateDirStructure(arch)
       }
       chkPath(defFile, 'LAMs', found.defFileName, false);
       chkPath(defFile, 'moolets', found.defFileName, false);
+      chkPath(defFile, 'moolets.name', found.defFileName, false);
+      chkPath(defFile, 'moolets.description', found.defFileName, true);
       chkPath(defFile, 'inputs', found.defFileName, true);
-      chkPath(defFile, 'readonly', found.defFileName, true);
 
       if (version !== String(arch.match(reVer))) {
         logger('ERROR', 'Archive file name doesn\'t match version. ' + version + ' <> ' + String(arch.match(reVer)));
@@ -295,7 +296,7 @@ function cleanMjson(mjson)
   {
     //console.log(keys[k]);
     //reRep = new RegExp('[^"$]'+keys[k],'');
-    reRep = new RegExp('\\\\"|"(?:\\\\"|[^"])*"|(' + keys[k] + ')', 'g');
+    reRep = new RegExp('\\\\"|"(?:\\\\"|[^"])*"|(\\b' + keys[k] + ')', 'g');
     //console.log(reRep);
     json = json.replace(reRep, function (m, g)
     {
@@ -364,7 +365,7 @@ function chkPath(obj, path, objName, allowEmpty)
 
   // Check the object exists
   //
-  if (!cur || cur == null || typeof(cur) === 'undefined')
+  if (!cur || cur === null || typeof(cur) === 'undefined')
   {
     logger('WARN', "No object '+objName+' passed for path " + path);
     return;
@@ -389,9 +390,11 @@ function chkPath(obj, path, objName, allowEmpty)
 
     // If we can't find a path to the leaf return undefined
     //
-    if (typeof(cur) === 'undefined')
+    //console.log(util.inspect(keys) + ' '+key);
+
+    if (!cur)
     {
-      if (i === keys.length - 1)
+      if (typeof(cur) !== 'undefined')
       {
         if (allowEmpty)
         {
@@ -438,7 +441,7 @@ function chkEqu(obj1, obj2, name1, name2, path1, path2)
   {
     path2 = path1;
   }
-  if (chkPath(obj1, path1, name1) == chkPath(obj2, path2, name2))
+  if (chkPath(obj1, path1, name1) === chkPath(obj2, path2, name2))
   {
     logger('INFO', 'Matching elements for ' + path1 + ' :' + chkPath(obj1, path1, name1));
     return true;
